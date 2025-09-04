@@ -2,8 +2,8 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Galería 3D con Sensor de Movimiento</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galería 3D en el Espacio</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -15,34 +15,6 @@
         }
         canvas {
             display: block;
-        }
-        #start-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.85);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 100;
-            cursor: pointer;
-        }
-        #start-btn {
-            padding: 15px 35px;
-            font-size: 1.2rem;
-            font-weight: 500;
-            background-color: transparent;
-            color: white;
-            border: 2px solid white;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background-color 0.3s, color 0.3s;
-        }
-        #start-btn:hover {
-            background-color: white;
-            color: black;
         }
         #info-container {
             position: absolute;
@@ -89,12 +61,9 @@
 </head>
 <body>
 
-    <div id="start-overlay">
-        <button id="start-btn">Entrar</button>
-    </div>
-
     <div id="info-container">
-        <!-- El contenido se llenará dinámicamente -->
+        <h1>Galería 3D</h1>
+        <p>Haz clic y arrastra para explorar. Haz clic en una imagen para ampliarla.</p>
     </div>
 
     <button id="close-btn">&times;</button>
@@ -111,7 +80,6 @@
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-        import { DeviceOrientationControls } from 'three/addons/controls/DeviceOrientationControls.js';
 
         // --- Configuración básica ---
         let scene, camera, renderer, controls;
@@ -123,38 +91,6 @@
         let originalCameraPosition = new THREE.Vector3();
         let originalCameraQuaternion = new THREE.Quaternion();
         const closeBtn = document.getElementById('close-btn');
-        const startOverlay = document.getElementById('start-overlay');
-        const startBtn = document.getElementById('start-btn');
-        const infoContainer = document.getElementById('info-container');
-
-        function startExperience() {
-            startOverlay.style.display = 'none';
-            init();
-            animate();
-        }
-
-        startBtn.addEventListener('click', () => {
-            // Manejo de permisos para iOS 13+
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission()
-                    .then(permissionState => {
-                        if (permissionState === 'granted') {
-                            startExperience();
-                        } else {
-                            alert('Permiso de movimiento denegado. Se usarán controles táctiles de arrastre.');
-                            startExperience();
-                        }
-                    })
-                    .catch(error => {
-                        console.error(error);
-                        alert('Error al solicitar permiso de movimiento. Se usarán controles táctiles.');
-                        startExperience();
-                    });
-            } else {
-                startExperience();
-            }
-        });
-
 
         function init() {
             scene = new THREE.Scene();
@@ -164,22 +100,14 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
 
-            // --- Selección de Controles ---
-            const isMobile = 'ontouchstart' in window && /Mobi|Android/i.test(navigator.userAgent);
-
-            if (isMobile) {
-                controls = new DeviceOrientationControls(camera);
-                infoContainer.innerHTML = `<h1>Galería 3D</h1><p>Mueve tu dispositivo para explorar.</p>`;
-            } else {
-                controls = new OrbitControls(camera, renderer.domElement);
-                controls.enableDamping = true;
-                controls.dampingFactor = 0.05;
-                controls.enableZoom = false;
-                controls.rotateSpeed = -0.25;
-                controls.minDistance = 5;
-                controls.maxDistance = 50;
-                infoContainer.innerHTML = `<h1>Galería 3D</h1><p>Haz clic y arrastra para explorar.</p>`;
-            }
+            // --- Controles de cámara ---
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.enableZoom = false;
+            controls.rotateSpeed = -0.25;
+            controls.minDistance = 5;
+            controls.maxDistance = 50;
 
             const textureLoader = new THREE.TextureLoader();
 
@@ -187,7 +115,7 @@
             const starGeometry = new THREE.SphereGeometry(500, 64, 64);
             const starMaterial = new THREE.MeshBasicMaterial({
                 map: createStarTexture(),
-                side: THREE.BackSide 
+                side: THREE.BackSide // Renderizar el interior de la esfera
             });
             const backgroundSphere = new THREE.Mesh(starGeometry, starMaterial);
             scene.add(backgroundSphere);
@@ -298,6 +226,8 @@
             
             targetPosition.copy(originalCameraPosition);
             targetQuaternion.copy(originalCameraQuaternion);
+            
+            // The animate loop will now handle re-enabling the controls.
         }
         
         function animate() {
@@ -306,19 +236,26 @@
             if (controls.enabled) {
                 controls.update();
             } else {
+                 // If controls are disabled, we are zooming in or out.
                 camera.position.lerp(targetPosition, 0.08);
                 camera.quaternion.slerp(targetQuaternion, 0.08);
 
+                // Check if we are zooming out and have arrived at the destination.
                 if (!isZoomed && camera.position.distanceTo(targetPosition) < 0.1) {
                     controls.enabled = true;
-                    camera.position.copy(targetPosition); 
+                    camera.position.copy(targetPosition); // Snap to final position to prevent overshoot.
                 }
             }
 
             renderer.render(scene, camera);
         }
+
+        init();
+        animate();
     </script>
 
 </body>
 </html>
+
+
 
