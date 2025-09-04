@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Galería 3D con Sensor de Movimiento</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Inter', sans-serif;
+            background-color: #111;
+            color: white;
+            overflow: hidden; /* Evita barras de scroll */
+        }
+        canvas {
+            display: block;
+        }
+        #start-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            cursor: pointer;
+        }
+        #start-btn {
+            padding: 15px 35px;
+            font-size: 1.2rem;
+            font-weight: 500;
+            background-color: transparent;
+            color: white;
+            border: 2px solid white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        #start-btn:hover {
+            background-color: white;
+            color: black;
+        }
+        #info-container {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            padding: 10px 20px;
+            background-color: rgba(0, 0, 0, 0.6);
+            border-radius: 8px;
+            z-index: 10;
+            pointer-events: none; /* Evita que intercepte clics */
+        }
+        h1 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+        p {
+            margin: 5px 0 0;
+            font-size: 0.9rem;
+        }
+        #close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            display: none; /* Oculto por defecto */
+            z-index: 20;
+            line-height: 40px;
+            text-align: center;
+        }
+        #close-btn:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="start-overlay">
+        <button id="start-btn">Entrar</button>
+    </div>
+
+    <div id="info-container">
+        <!-- El contenido se llenará dinámicamente -->
+    </div>
+
+    <button id="close-btn">&times;</button>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { DeviceOrientationControls } from 'three/addons/controls/DeviceOrientationControls.js';
+
+        // --- Configuración básica ---
+        let scene, camera, renderer, controls;
+        let raycaster, mouse;
+        const cards = [];
+        let isZoomed = false;
+        let targetPosition = new THREE.Vector3();
+        let targetQuaternion = new THREE.Quaternion();
+        let originalCameraPosition = new THREE.Vector3();
+        let originalCameraQuaternion = new THREE.Quaternion();
+        const closeBtn = document.getElementById('close-btn');
+        const startOverlay = document.getElementById('start-overlay');
+        const startBtn = document.getElementById('start-btn');
+        const infoContainer = document.getElementById('info-container');
+
+        function startExperience() {
+            startOverlay.style.display = 'none';
+            init();
+            animate();
+        }
+
+        startBtn.addEventListener('click', () => {
+            // Manejo de permisos para iOS 13+
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            startExperience();
+                        } else {
+                            alert('Permiso de movimiento denegado. Se usarán controles táctiles.');
+                            startExperience();
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                startExperience();
+            }
+        });
+
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // --- Selección de Controles ---
+            const isMobile = 'DeviceOrientationEvent' in window;
+
+            if (isMobile) {
+                controls = new DeviceOrientationControls(camera);
+                infoContainer.innerHTML = `<h1>Galería 3D</h1><p>Mueve tu dispositivo para explorar.</p>`;
+            } else {
+                controls = new OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.05;
+                controls.enableZoom = false;
+                controls.rotateSpeed = -0.25;
+                controls.minDistance = 5;
+                controls.maxDistance = 50;
+                infoContainer.innerHTML = `<h1>Galería 3D</h1><p>Haz clic y arrastra para explorar.</p>`;
+            }
+
+            const textureLoader = new THREE.TextureLoader();
+
+            // --- Fondo de la escena (Esfera con estrellas) ---
+            const starGeometry = new THREE.SphereGeometry(500, 64, 64);
+            const starMaterial = new THREE.MeshBasicMaterial({
+                map: createStarTexture(),
+                side: THREE.BackSide 
+            });
+            const backgroundSphere = new THREE.Mesh(starGeometry, starMaterial);
+            scene.add(backgroundSphere);
+
+            function createStarTexture() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 2048;
+                canvas.height = 1024;
+                const context = canvas.getContext('2d');
+                context.fillStyle = '#000011';
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                context.fillStyle = 'white';
+                for (let i = 0; i < 2000; i++) {
+                    const x = Math.random() * canvas.width;
+                    const y = Math.random() * canvas.height;
+                    const radius = Math.random() * 1.2;
+                    context.beginPath();
+                    context.arc(x, y, radius, 0, 2 * Math.PI);
+                    context.fill();
+                }
+                return new THREE.CanvasTexture(canvas);
+            }
+
+            // --- Creación de las tarjetas de imagen ---
+            const imageUrls = [
+                "https://placehold.co/800x600/7b5b44/ffffff?text=Perrito+al+óleo+1", "https://placehold.co/800x600/a07a5f/ffffff?text=Perrito+al+óleo+2",
+                "https://placehold.co/800x600/c29979/ffffff?text=Perrito+al+óleo+3", "https://placehold.co/800x600/d4ac8e/ffffff?text=Perrito+al+óleo+4",
+                "https://placehold.co/800x600/e6bf9f/ffffff?text=Perrito+al+óleo+5", "https://placehold.co/800x600/b38b6d/ffffff?text=Perrito+al+óleo+6",
+                "https://placehold.co/800x600/8c6d52/ffffff?text=Perrito+al+óleo+7", "https://placehold.co/800x600/664f39/ffffff?text=Perrito+al+óleo+8",
+                "https://placehold.co/800x600/99775c/ffffff?text=Perrito+al+óleo+9", "https://placehold.co/800x600/cca88b/ffffff?text=Perrito+al+óleo+10"
+            ];
+
+            const cardGeometry = new THREE.PlaneGeometry(16, 12);
+            const radius = 35;
+            const angleStep = (Math.PI * 2) / imageUrls.length;
+
+            imageUrls.forEach((url, index) => {
+                const texture = textureLoader.load(url);
+                const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
+                const card = new THREE.Mesh(cardGeometry, material);
+
+                const angle = index * angleStep;
+                const x = radius * Math.sin(angle);
+                const z = radius * Math.cos(angle);
+                
+                card.position.set(x, 0, z);
+                card.lookAt(new THREE.Vector3(0, 0, 0));
+                
+                scene.add(card);
+                cards.push(card);
+            });
+
+            // --- Posición inicial de la cámara ---
+            camera.position.z = 0.1;
+            targetPosition.copy(camera.position);
+            targetQuaternion.copy(camera.quaternion);
+
+            // --- Raycasting para clics ---
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+            
+            // --- Event Listeners ---
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('click', onMouseClick);
+            closeBtn.addEventListener('click', zoomOut);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function onMouseClick(event) {
+            if (isZoomed) return;
+
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(cards);
+
+            if (intersects.length > 0) {
+                const clickedCard = intersects[0].object;
+                zoomIn(clickedCard);
+            }
+        }
+
+        function zoomIn(card) {
+            isZoomed = true;
+            controls.enabled = false;
+            closeBtn.style.display = 'block';
+
+            originalCameraPosition.copy(camera.position);
+            originalCameraQuaternion.copy(camera.quaternion);
+
+            const offset = 12; // Distancia de la cámara a la imagen ampliada
+            const cardPosition = card.position.clone();
+            targetPosition.copy(cardPosition).normalize().multiplyScalar(cardPosition.length() - offset);
+            
+            const tempMatrix = new THREE.Matrix4().lookAt(targetPosition, card.position, camera.up);
+            targetQuaternion.setFromRotationMatrix(tempMatrix);
+        }
+
+        function zoomOut() {
+            isZoomed = false;
+            closeBtn.style.display = 'none';
+            
+            targetPosition.copy(originalCameraPosition);
+            targetQuaternion.copy(originalCameraQuaternion);
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (controls.enabled) {
+                controls.update();
+            } else {
+                camera.position.lerp(targetPosition, 0.08);
+                camera.quaternion.slerp(targetQuaternion, 0.08);
+
+                if (!isZoomed && camera.position.distanceTo(targetPosition) < 0.1) {
+                    controls.enabled = true;
+                    camera.position.copy(targetPosition); 
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+    </script>
+
+</body>
+</html>
+
