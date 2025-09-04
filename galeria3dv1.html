@@ -141,11 +141,15 @@
                         if (permissionState === 'granted') {
                             startExperience();
                         } else {
-                            alert('Permiso de movimiento denegado. Se usarán controles táctiles.');
+                            alert('Permiso de movimiento denegado. Se usarán controles táctiles de arrastre.');
                             startExperience();
                         }
                     })
-                    .catch(console.error);
+                    .catch(error => {
+                        console.error(error);
+                        alert('Error al solicitar permiso de movimiento. Se usarán controles táctiles.');
+                        startExperience();
+                    });
             } else {
                 startExperience();
             }
@@ -161,7 +165,7 @@
             document.body.appendChild(renderer.domElement);
 
             // --- Selección de Controles ---
-            const isMobile = 'DeviceOrientationEvent' in window;
+            const isMobile = 'ontouchstart' in window && /Mobi|Android/i.test(navigator.userAgent);
 
             if (isMobile) {
                 controls = new DeviceOrientationControls(camera);
