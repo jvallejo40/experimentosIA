@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Objetos con Movimiento</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Estilos personalizados para un mejor aspecto */
+        body {
+            font-family: 'Inter', sans-serif;
+            touch-action: none; /* Previene el zoom al tocar dos veces en móviles */
+        }
+        .orb {
+            border-radius: 50%;
+            position: absolute;
+            transition: transform 0.1s ease-out;
+            will-change: transform;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white overflow-hidden flex items-center justify-center min-h-screen">
+
+    <!-- Contenedor principal de los objetos -->
+    <div id="scene" class="w-full h-full absolute">
+        <div id="orb1" class="orb w-32 h-32 bg-gradient-to-br from-purple-500 to-indigo-600 opacity-80" style="top: 20%; left: 30%;"></div>
+        <div id="orb2" class="orb w-48 h-48 bg-gradient-to-br from-teal-400 to-cyan-500 opacity-70" style="top: 50%; left: 60%;"></div>
+        <div id="orb3" class="orb w-24 h-24 bg-gradient-to-br from-pink-500 to-rose-500 opacity-90" style="top: 40%; left: 15%;"></div>
+    </div>
+
+    <!-- Texto de instrucciones en el centro -->
+    <div class="z-10 text-center p-4 rounded-lg">
+        <h1 class="text-4xl md:text-5xl font-bold mb-2">¡Mueve tu celular!</h1>
+        <p id="instructions" class="text-lg text-gray-300">Inclina el dispositivo para ver cómo reaccionan los objetos.</p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const scene = document.getElementById('scene');
+            const instructions = document.getElementById('instructions');
+            
+            // Verifica si el dispositivo soporta el evento 'devicemotion'
+            if (window.DeviceMotionEvent) {
+                // Pide permiso para acceder a los sensores en dispositivos iOS 13+
+                if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                    instructions.textContent = 'Toca la pantalla para activar los sensores.';
+                    document.body.addEventListener('click', () => {
+                        DeviceMotionEvent.requestPermission()
+                            .then(permissionState => {
+                                if (permissionState === 'granted') {
+                                    window.addEventListener('devicemotion', handleMotion);
+                                    instructions.textContent = '¡Genial! Ahora inclina el dispositivo.';
+                                } else {
+                                     instructions.textContent = 'Permiso denegado. No se puede acceder a los sensores.';
+                                }
+                            })
+                            .catch(console.error);
+                    }, { once: true });
+                } else {
+                    // Para otros dispositivos (Android)
+                    window.addEventListener('devicemotion', handleMotion);
+                }
+            } else {
+                // Fallback para computadoras de escritorio usando el movimiento del mouse
+                instructions.textContent = 'Mueve el mouse para ver el efecto.';
+                document.addEventListener('mousemove', handleMouseMove);
+            }
+
+            function handleMotion(event) {
+                // Obtiene la aceleración incluyendo la gravedad
+                const { x, y } = event.accelerationIncludingGravity;
+                const maxTilt = 10; // Límite para la inclinación (originalmente 9.8 m/s^2)
+
+                // Normaliza los valores de inclinación de -1 a 1
+                const moveX = Math.max(-1, Math.min(1, -x / maxTilt));
+                const moveY = Math.max(-1, Math.min(1, y / maxTilt));
+
+                moveObjects(moveX, moveY);
+            }
+
+            function handleMouseMove(event) {
+                // Normaliza la posición del mouse de -1 a 1
+                const moveX = (event.clientX / window.innerWidth) * 2 - 1;
+                const moveY = (event.clientY / window.innerHeight) * 2 - 1;
+                
+                moveObjects(moveX, moveY);
+            }
+
+            function moveObjects(moveX, moveY) {
+                const sensitivity1 = 30;
+                const sensitivity2 = 60;
+                const sensitivity3 = 15;
+                
+                const orb1 = document.getElementById('orb1');
+                const orb2 = document.getElementById('orb2');
+                const orb3 = document.getElementById('orb3');
+
+                // Mueve cada objeto con una sensibilidad diferente para crear un efecto de paralaje
+                orb1.style.transform = `translate3d(${moveX * sensitivity1}px, ${moveY * sensitivity1}px, 0)`;
+                orb2.style.transform = `translate3d(${moveX * sensitivity2}px, ${moveY * sensitivity2}px, 0)`;
+                orb3.style.transform = `translate3d(${moveX * sensitivity3}px, ${moveY * sensitivity3}px, 0)`;
+            }
+        });
+    </script>
+
+</body>
+</html>
