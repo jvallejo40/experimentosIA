@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Galería Interactiva Estilo Cómic</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* Evita el scroll causado por los elementos de física */
+            font-family: 'Inter', sans-serif;
+        }
+        .clip-star {
+            clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+        }
+        
+        #physics-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: #f1f5f9; /* bg-slate-100 */
+        }
+
+        .gallery-item {
+            position: absolute;
+            cursor: pointer;
+            will-change: transform;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Modal para solicitar permisos en iOS -->
+    <div id="permission-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden">
+        <div class="bg-white p-8 rounded-lg text-center shadow-xl mx-4">
+            <h2 class="text-2xl font-bold mb-4">Activar Controles por Movimiento</h2>
+            <p class="mb-6">Permite el acceso a los sensores de movimiento para controlar los objetos inclinando tu dispositivo.</p>
+            <button id="permission-button" class="bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-indigo-700 transition-colors">
+                Activar
+            </button>
+        </div>
+    </div>
+
+    <div id="physics-container">
+        <!-- Las imágenes se insertarán aquí dinámicamente con JS -->
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const isTouchDevice = () => 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+            const { Engine, Runner, World, Bodies, Body } = Matter;
+
+            const container = document.getElementById('physics-container');
+            const engine = Engine.create();
+            const world = engine.world;
+            engine.world.gravity.y = 0; // La gravedad inicial es 0, controlada por el sensor
+            engine.world.gravity.x = 0;
+
+            let boundaries = [];
+            const boundaryOptions = { isStatic: true, render: { visible: false } };
+
+            function setupBoundaries() {
+                if (boundaries.length) {
+                    World.remove(world, boundaries);
+                }
+                const width = window.innerWidth;
+                const height = window.innerHeight;
+                const thickness = 60;
+
+                boundaries = [
+                    Bodies.rectangle(width / 2, height + thickness / 2, width, thickness, boundaryOptions),
+                    Bodies.rectangle(width / 2, -thickness / 2, width, thickness, boundaryOptions),
+                    Bodies.rectangle(-thickness / 2, height / 2, thickness, height, boundaryOptions),
+                    Bodies.rectangle(width + thickness / 2, height / 2, thickness, height, boundaryOptions)
+                ];
+                World.add(world, boundaries);
+            }
+
+            setupBoundaries();
+
+            const galleryItems = [];
+            const itemSize = window.innerWidth < 768 ? 80 : 120;
+            const colors = ['6366f1', '8b5cf6', 'ec4899', 'f59e0b', '10b981', '3b82f6', 'ef4444', 'f97316'];
+            const starVertices = Matter.Vertices.fromPath(`0 -${itemSize/2} ${itemSize*0.11} -${itemSize*0.15} ${itemSize*0.48} -${itemSize*0.15} ${itemSize*0.18} ${itemSize*0.07} ${itemSize*0.29} ${itemSize*0.41} 0 ${itemSize*0.20} -${itemSize*0.29} ${itemSize*0.41} -${itemSize*0.18} ${itemSize*0.07} -${itemSize*0.48} -${itemSize*0.15} -${itemSize*0.11} -${itemSize*0.15}`);
+            
+            for (let i = 1; i <= 8; i++) {
+                const element = document.createElement('div');
+                element.classList.add('gallery-item');
+                element.style.width = `${itemSize}px`;
+                element.style.height = `${itemSize}px`;
+                
+                const innerDiv = document.createElement('div');
+                innerDiv.className = "w-full h-full bg-white p-1.5 border-4 border-black shadow-lg overflow-hidden transition-colors duration-300 ease-in-out hover:border-yellow-400";
+
+                const img = document.createElement('img');
+                img.src = `https://placehold.co/${itemSize}x${itemSize}/${colors[i-1]}/white?text=Viñeta+${i}`;
+                img.alt = `Imagen de viñeta de cómic ${i}`;
+                img.className = "w-full h-full object-cover";
+                
+                innerDiv.appendChild(img);
+                element.appendChild(innerDiv);
+                
+                const startX = Math.random() * (window.innerWidth - itemSize) + itemSize / 2;
+                const startY = Math.random() * (window.innerHeight / 2);
+
+                let body;
+                const bodyOptions = { restitution: 0.6, friction: 0.3 };
+                
+                if (i === 2 || i === 7) {
+                    body = Bodies.circle(startX, startY, itemSize / 2, bodyOptions);
+                    innerDiv.classList.add('rounded-full');
+                    img.classList.add('rounded-full');
+                } else if (i === 4 || i === 5) {
+                    body = Bodies.fromVertices(startX, startY, starVertices, bodyOptions);
+                    innerDiv.classList.add('clip-star');
+                } else {
+                    body = Bodies.rectangle(startX, startY, itemSize, itemSize, bodyOptions);
+                    innerDiv.classList.add('rounded-md');
+                    img.classList.add('rounded-sm');
+                }
+
+                container.appendChild(element);
+                World.add(world, body);
+                galleryItems.push({ element, body });
+                
+                if (!isTouchDevice()) {
+                     engine.world.gravity.y = 0.6; // Gravedad solo para escritorio
+                    element.addEventListener('mouseover', () => {
+                        Body.applyForce(body, body.position, {
+                            x: (Math.random() - 0.5) * 0.1,
+                            y: -0.2
+                        });
+                    });
+                }
+            }
+
+            // --- LÓGICA DE MOVIMIENTO (CORREGIDA Y SIMPLIFICADA) ---
+            const permissionModal = document.getElementById('permission-modal');
+            const permissionButton = document.getElementById('permission-button');
+
+            function startMotionTracking() {
+                if ('DeviceOrientationEvent' in window) {
+                    window.addEventListener('deviceorientation', (event) => {
+                        const { beta, gamma } = event; // beta: inclinación adelante-atrás, gamma: inclinación izquierda-derecha
+                        
+                        // Normalizamos los valores para que estén entre -1 y 1
+                        const gravityX = Math.max(-1, Math.min(1, gamma / 45));
+                        const gravityY = Math.max(-1, Math.min(1, beta / 45));
+
+                        engine.world.gravity.x = gravityX;
+                        engine.world.gravity.y = gravityY;
+                    });
+                }
+            }
+
+            // Para iOS 13+, pedimos permiso para DeviceOrientationEvent
+            if (isTouchDevice() && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                permissionModal.classList.remove('hidden');
+                permissionButton.addEventListener('click', () => {
+                    DeviceOrientationEvent.requestPermission()
+                        .then(response => {
+                            if (response === 'granted') {
+                                startMotionTracking();
+                            }
+                            permissionModal.classList.add('hidden');
+                        })
+                        .catch(console.error);
+                });
+            } else if (isTouchDevice()) {
+                // Para Android y otros dispositivos
+                startMotionTracking();
+            }
+            
+            window.addEventListener('resize', setupBoundaries);
+
+            (function update() {
+                galleryItems.forEach(({ element, body }) => {
+                    const { x, y } = body.position;
+                    element.style.transform = `translate(${x - itemSize / 2}px, ${y - itemSize / 2}px) rotate(${body.angle}rad)`;
+                });
+                requestAnimationFrame(update);
+            })();
+
+            const runner = Runner.create();
+            Runner.run(runner, engine);
+        });
+    </script>
+</body>
+</html>
+
